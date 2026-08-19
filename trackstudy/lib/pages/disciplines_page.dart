@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:trackstudy/models/discipline.dart';
+import 'package:trackstudy/database/app_database.dart';
 
 class DisciplinesPage extends StatefulWidget {
   const DisciplinesPage({super.key});
@@ -9,7 +9,96 @@ class DisciplinesPage extends StatefulWidget {
 }
 
 class _DisciplinesPageState extends State<DisciplinesPage> {
-  List<Discipline> disciplines = [];
+  final AppDatabase database = AppDatabase();
+
+  //lista das disciplinas cadastradas
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Disciplinas')),
+      body: StreamBuilder<List<Discipline>>(
+        stream: database.disciplinesDao.watchAllDisciplines(),
+        builder: (context, snapshot) {
+          final disciplines = snapshot.data ?? [];
+
+          if (disciplines.isEmpty) {
+            return const Center(child: Text('Nenhuma disciplina cadastrada.'));
+          }
+
+          return ListView.builder(
+            itemCount: disciplines.length,
+            itemBuilder: (context, index) {
+              final discipline = disciplines[index];
+
+              return ListTile(
+                title: Text(discipline.name),
+                subtitle: Text(
+                  'Meta semanal: ${discipline.weeklyGoalMinutes} min',
+                ),
+
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Editar
+                    IconButton(
+                      icon: const Icon(Icons.edit),
+                      onPressed: () {
+                        _showEditDisciplineDialog(discipline);
+                      },
+                    ),
+
+                    // Excluir
+                    IconButton(
+                      icon: const Icon(Icons.delete),
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) {
+                            return AlertDialog(
+                              title: const Text('Confirmar exclusão'),
+                              content: Text(
+                                'Deseja realmente excluir ${disciplines[index].name}?',
+                              ),
+                              actionsAlignment: MainAxisAlignment.center,
+                              actions: [
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                  },
+                                  child: const Text('Cancelar'),
+                                ),
+                                FilledButton(
+                                  onPressed: () async {
+                                    await database.disciplinesDao.deleteDiscipline(discipline);
+
+                                    if (context.mounted) {
+                                      Navigator.pop(context);
+                                    }
+                                  },
+                                  child: const Text('Excluir'),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          _showAddDisciplineDialog();
+        },
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
 
   // Função para exibir o diálogo de adicionar disciplina
   void _showAddDisciplineDialog() {
@@ -52,21 +141,22 @@ class _DisciplinesPageState extends State<DisciplinesPage> {
               child: const Text('Cancelar'),
             ),
             FilledButton(
-              onPressed: () {
+              onPressed: () async {
                 final name = nameController.text.trim();
                 final goal = int.tryParse(goalController.text);
 
                 if (name.isNotEmpty && goal != null && goal > 0) {
-                  setState(() {
-                    disciplines.add(
-                      Discipline(name: name, weeklyGoalMinutes: goal),
-                    );
-                  });
-
-                  Navigator.pop(context);
+                  await database.disciplinesDao.insertDiscipline(
+                    DisciplinesCompanion.insert(
+                      name: name,
+                      weeklyGoalMinutes: goal,
+                    ),
+                  );
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                  }
                 }
               },
-
               child: const Text('Salvar'),
             ),
           ],
@@ -75,9 +165,11 @@ class _DisciplinesPageState extends State<DisciplinesPage> {
     );
   }
 
-  void _showEditDisciplineDialog(int index) {
-    final nameController = TextEditingController(text: disciplines[index].name);
-    final goalController = TextEditingController(text: disciplines[index].weeklyGoalMinutes.toString());
+  void _showEditDisciplineDialog(Discipline discipline) {
+    final nameController = TextEditingController(text: discipline.name);
+    final goalController = TextEditingController(
+      text: discipline.weeklyGoalMinutes.toString(),
+    );
 
     showDialog(
       context: context,
@@ -114,15 +206,22 @@ class _DisciplinesPageState extends State<DisciplinesPage> {
               child: const Text('Cancelar'),
             ),
             FilledButton(
-              onPressed: () {
+              onPressed: () async {
                 final name = nameController.text.trim();
                 final goal = int.tryParse(goalController.text);
 
                 if (name.isNotEmpty && goal != null && goal > 0) {
-                  setState(() {
-                    disciplines[index] = Discipline(name: name, weeklyGoalMinutes: goal);
-                  });
-                  Navigator.pop(context);
+                  await database.disciplinesDao.updateDiscipline(
+                    Discipline(
+                      id: discipline.id,
+                      name: name,
+                      weeklyGoalMinutes: goal,
+                    ),
+                  );
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                  }
                 }
               },
               child: const Text('Salvar'),
@@ -130,83 +229,6 @@ class _DisciplinesPageState extends State<DisciplinesPage> {
           ],
         );
       },
-    );
-  }
-  //lista das disciplinas cadastradas
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Disciplinas')),
-      body: disciplines.isEmpty
-          ? const Center(child: Text('Nenhuma disciplina cadastrada.'))
-          : ListView.builder(
-              itemCount: disciplines.length,
-              itemBuilder: (context, index) {
-                return ListTile(
-                  title: Text(disciplines[index].name),
-                  subtitle: Text(
-                    'Meta semanal: ${disciplines[index].weeklyGoalMinutes} min',
-                  ),
-
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Editar
-                      IconButton(
-                        icon: const Icon(Icons.edit),
-                        onPressed: () {
-                          _showEditDisciplineDialog(index);
-                        },
-                      ),
-
-                      // Excluir
-                      IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) {
-                              return AlertDialog(
-                                title: const Text('Confirmar exclusão'),
-                                content: Text(
-                                  'Deseja realmente excluir ${disciplines[index].name}?',
-                                ),
-                                actionsAlignment: MainAxisAlignment.center,
-                                actions: [
-                                  TextButton(
-                                    onPressed: () {
-                                      Navigator.pop(context);
-                                    },
-                                    child: const Text('Cancelar'),
-                                  ),
-                                  FilledButton(
-                                    onPressed: () {
-                                      Navigator.pop(context);
-
-                                      setState(() {
-                                        disciplines.removeAt(index);
-                                      });
-                                    },
-                                    child: const Text('Excluir'),
-                                  ),
-                                ],
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          _showAddDisciplineDialog();
-        },
-        child: const Icon(Icons.add),
-      ),
     );
   }
 }
