@@ -5,11 +5,7 @@ import 'package:trackstudy/database/tables/disciplines_table.dart';
 
 part 'disciplines_dao.g.dart';
 
-@DriftAccessor(
-  tables: [
-    Disciplines,
-  ],
-)
+@DriftAccessor(tables: [Disciplines])
 class DisciplinesDao extends DatabaseAccessor<AppDatabase>
     with _$DisciplinesDaoMixin {
   DisciplinesDao(super.attachedDatabase);

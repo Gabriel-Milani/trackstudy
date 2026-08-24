@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
-import 'pages/disciplines_page.dart';
+import 'package:trackstudy/database/app_database.dart';
+import 'package:trackstudy/pages/home_page.dart';
 
 void main() {
-  runApp(const TrackStudyApp());
+  runApp(TrackStudyApp(database: AppDatabase()));
 }
 
 class TrackStudyApp extends StatelessWidget {
-  const TrackStudyApp({super.key});
+  const TrackStudyApp({super.key, required this.database});
+
+  final AppDatabase database;
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +20,7 @@ class TrackStudyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
-      home: const DisciplinesPage(),
+      home: HomePage(database: database),
     );
   }
 }

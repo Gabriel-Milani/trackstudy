@@ -2,14 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:trackstudy/database/app_database.dart';
 
 class DisciplinesPage extends StatefulWidget {
-  const DisciplinesPage({super.key});
+  const DisciplinesPage({super.key, required this.database});
+
+  final AppDatabase database;
 
   @override
   State<DisciplinesPage> createState() => _DisciplinesPageState();
 }
 
 class _DisciplinesPageState extends State<DisciplinesPage> {
-  final AppDatabase database = AppDatabase();
+  AppDatabase get database => widget.database;
 
   //lista das disciplinas cadastradas
   @override
@@ -69,7 +71,8 @@ class _DisciplinesPageState extends State<DisciplinesPage> {
                                 ),
                                 FilledButton(
                                   onPressed: () async {
-                                    await database.disciplinesDao.deleteDiscipline(discipline);
+                                    await database.disciplinesDao
+                                        .deleteDiscipline(discipline);
 
                                     if (context.mounted) {
                                       Navigator.pop(context);
