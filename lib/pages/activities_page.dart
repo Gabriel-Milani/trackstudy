@@ -2,6 +2,8 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:trackstudy/database/app_database.dart';
 import 'package:trackstudy/database/daos/activities_dao.dart';
+import 'package:trackstudy/theme/app_colors.dart';
+import 'package:trackstudy/widgets/dashboard_widgets.dart';
 
 class ActivitiesPage extends StatelessWidget {
   const ActivitiesPage({super.key, required this.database});
@@ -23,7 +25,11 @@ class ActivitiesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Atividades e prazos')),
+      appBar: const AppHeaderBar(
+        icon: Icons.checklist_rounded,
+        title: 'Atividades e prazos',
+        subtitle: 'Organize suas entregas e nunca perca um prazo.',
+      ),
       body: StreamBuilder<List<ActivityWithDiscipline>>(
         stream: database.activitiesDao.watchActivities(),
         builder: (context, snapshot) {
@@ -63,17 +69,27 @@ class ActivitiesPage extends StatelessWidget {
                         ? TextStyle(color: Theme.of(context).colorScheme.error)
                         : null,
                   ),
-                  secondary: PopupMenuButton<String>(
-                    onSelected: (action) {
-                      if (action == 'edit') {
-                        _openForm(context, existing: item.activity);
-                      } else {
-                        database.activitiesDao.deleteActivity(item.activity);
-                      }
-                    },
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(value: 'edit', child: Text('Editar')),
-                      PopupMenuItem(value: 'delete', child: Text('Excluir')),
+                  secondary: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SoftIconButton(
+                        icon: Icons.edit_rounded,
+                        tooltip: 'Editar',
+                        background: AppColors.disciplineBg[0],
+                        iconColor: AppColors.disciplineFg[0],
+                        onTap: () =>
+                            _openForm(context, existing: item.activity),
+                      ),
+                      const SizedBox(width: 6),
+                      SoftIconButton(
+                        icon: Icons.delete_outline_rounded,
+                        tooltip: 'Excluir',
+                        background: const Color(0xFFFEE2E2),
+                        iconColor: AppColors.alert,
+                        onTap: () => database.activitiesDao.deleteActivity(
+                          item.activity,
+                        ),
+                      ),
                     ],
                   ),
                 ),

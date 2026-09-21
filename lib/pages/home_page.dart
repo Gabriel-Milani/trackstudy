@@ -1,12 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:trackstudy/database/app_database.dart';
+import 'package:trackstudy/database/daos/activities_dao.dart';
+import 'package:trackstudy/database/daos/study_sessions_dao.dart';
 import 'package:trackstudy/pages/disciplines_page.dart';
 import 'package:trackstudy/pages/activities_page.dart';
 import 'package:trackstudy/pages/history_page.dart';
 import 'package:trackstudy/pages/statistics_page.dart';
 import 'package:trackstudy/pages/timer_page.dart';
+import 'package:trackstudy/services/dashboard_service.dart';
 import 'package:trackstudy/services/priority_service.dart';
 import 'package:trackstudy/services/weekly_summary_service.dart';
+import 'package:trackstudy/theme/app_colors.dart';
+import 'package:trackstudy/theme/app_text_styles.dart';
+import 'package:trackstudy/theme/discipline_category.dart';
+import 'package:trackstudy/theme/page_transitions.dart';
+import 'package:trackstudy/theme/theme_controller.dart';
+import 'package:trackstudy/widgets/dashboard_widgets.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.database});
@@ -18,46 +27,70 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  String _deadlineLabel(Activity activity) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final due = DateTime(
-      activity.dueAt.year,
-      activity.dueAt.month,
-      activity.dueAt.day,
-    );
-    final days = due.difference(today).inDays;
-    if (days < 0) return 'atrasada';
-    if (days == 0) return 'vence hoje';
-    if (days == 1) return 'vence amanhã';
-    return 'vence em $days dias';
-  }
+  DisciplineCategory? _filterCategory;
 
   Future<_HomeData> _loadData() async {
     final priorities = await PriorityService(
       widget.database,
     ).calculatePriorities();
     final summary = await WeeklySummaryService(widget.database).calculate();
-    return _HomeData(priorities: priorities, summary: summary);
+    final dashboard = await DashboardService(widget.database).calculate();
+    final sessions = await widget.database.studySessionsDao
+        .watchSessionsWithDiscipline()
+        .first;
+    final activities = await widget.database.activitiesDao
+        .watchActivities()
+        .first;
+    final upcoming = activities
+        .where((a) => !a.activity.isCompleted)
+        .take(3)
+        .toList();
+    return _HomeData(
+      priorities: priorities,
+      summary: summary,
+      dashboard: dashboard,
+      recentSessions: sessions.take(3).toList(),
+      upcomingActivities: upcoming,
+    );
   }
 
   Future<void> _open(Widget page) async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => page));
+    await Navigator.of(context).push(fadeSlideRoute<void>(page));
     if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
+    final textColor =
+        Theme.of(context).textTheme.bodyLarge?.color ??
+        AppColors.lightTextPrimary;
+    final secondaryColor = Theme.of(context).brightness == Brightness.dark
+        ? AppColors.darkTextSecondary
+        : AppColors.lightTextSecondary;
+    final themeController = ThemeController.of(context);
+    final isDark = themeController.themeMode == ThemeMode.dark;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('TrackStudy'),
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Image.asset(
+            isDark
+                ? 'assets/images/trackstudy_lockup_transparent.png'
+                : 'assets/images/trackstudy_lockup_light.png',
+            height: 36,
+          ),
+        ),
         actions: [
           IconButton(
-            tooltip: 'Atividades e prazos',
-            onPressed: () => _open(ActivitiesPage(database: widget.database)),
-            icon: const Icon(Icons.checklist),
+            tooltip: isDark
+                ? 'Usar tema claro'
+                : 'Usar tema escuro (acessibilidade)',
+            onPressed: themeController.toggleTheme,
+            icon: Icon(
+              isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+            ),
           ),
         ],
       ),
@@ -67,8 +100,8 @@ class _HomePageState extends State<HomePage> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          final priorities =
-              snapshot.data?.priorities ?? const <DisciplinePriority>[];
+          final data = snapshot.data;
+          final priorities = data?.priorities ?? const <DisciplinePriority>[];
           if (priorities.isEmpty) {
             return const Center(
               child: Padding(
@@ -80,35 +113,227 @@ class _HomePageState extends State<HomePage> {
             );
           }
 
+          final top = priorities.first;
+          final summary = data!.summary;
+          final dashboard = data.dashboard;
+          final filteredPriorities = _filterCategory == null
+              ? priorities
+              : priorities
+                    .where(
+                      (p) =>
+                          DisciplineCategory.fromKey(p.discipline.category) ==
+                          _filterCategory,
+                    )
+                    .toList();
+
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
               Text(
-                'Resumo semanal',
-                style: Theme.of(context).textTheme.titleLarge,
+                'Prioridade do momento',
+                style: AppTextStyles.sectionTitle(textColor),
               ),
               const SizedBox(height: 8),
-              _WeeklySummaryCard(summary: snapshot.data!.summary),
+              GradientHeroCard(
+                disciplineName: top.discipline.name,
+                remainingMinutes: top.remainingMinutes,
+                goalMinutes: top.discipline.weeklyGoalMinutes,
+                progress: top.discipline.weeklyGoalMinutes == 0
+                    ? 0
+                    : top.studiedMinutes / top.discipline.weeklyGoalMinutes,
+                onStudyPressed: () =>
+                    _open(TimerPage(database: widget.database)),
+              ),
               const SizedBox(height: 20),
               Text(
-                'Prioridades da semana',
-                style: Theme.of(context).textTheme.titleLarge,
+                'Resumo da semana',
+                style: AppTextStyles.sectionTitle(textColor),
               ),
               const SizedBox(height: 8),
-              ...priorities.map(
-                (priority) => Card(
-                  child: ListTile(
-                    title: Text(priority.discipline.name),
-                    subtitle: Text(
-                      '${priority.studiedMinutes} de '
-                      '${priority.discipline.weeklyGoalMinutes} min estudados'
-                      '${priority.nextActivity == null ? '' : '\nLembrete: ${priority.nextActivity!.title} (${_deadlineLabel(priority.nextActivity!)})'}',
-                    ),
-                    isThreeLine: priority.nextActivity != null,
-                    trailing: Text(
-                      '${priority.remainingMinutes} min restantes',
+              Row(
+                children: [
+                  Expanded(
+                    child: StatPill(
+                      icon: Icons.access_time_rounded,
+                      label: 'Total (todas)',
+                      value: summary.currentMinutes,
+                      suffix: 'm',
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: StatPill(
+                      icon: Icons.local_fire_department_rounded,
+                      label: 'Consistência',
+                      value: dashboard.streakDays,
+                      suffix: 'd',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: StatPill(
+                      icon: Icons.check_circle_rounded,
+                      label: 'Sessões',
+                      value: dashboard.sessionsThisWeek,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Theme.of(context).dividerColor,
+                    width: 0.6,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Evolução dos estudos',
+                      style: AppTextStyles.cardSubtitle(secondaryColor),
+                    ),
+                    const SizedBox(height: 8),
+                    WeeklyEvolutionChart(dailyMinutes: dashboard.dailyMinutes),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Próximas atividades',
+                style: AppTextStyles.sectionTitle(textColor),
+              ),
+              const SizedBox(height: 8),
+              UpcomingActivitiesCard(activities: data.upcomingActivities),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Progresso por disciplina',
+                    style: AppTextStyles.sectionTitle(textColor),
+                  ),
+                  PopupMenuButton<DisciplineCategory?>(
+                    tooltip: 'Filtrar por área',
+                    icon: Icon(
+                      _filterCategory == null
+                          ? Icons.filter_alt_outlined
+                          : Icons.filter_alt,
+                      color: _filterCategory == null
+                          ? secondaryColor
+                          : AppColors.primaryLight,
+                    ),
+                    onSelected: (value) =>
+                        setState(() => _filterCategory = value),
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: null,
+                        child: Text('Todas as áreas'),
+                      ),
+                      ...DisciplineCategory.values.map(
+                        (category) => PopupMenuItem(
+                          value: category,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(category.icon, size: 18),
+                              const SizedBox(width: 8),
+                              Text(category.label),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              if (filteredPriorities.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text('Nenhuma disciplina nessa área.'),
+                )
+              else
+                ...filteredPriorities.map(
+                  (priority) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: DisciplineProgressCard(
+                      name: priority.discipline.name,
+                      studiedMinutes: priority.studiedMinutes,
+                      goalMinutes: priority.discipline.weeklyGoalMinutes,
+                      category: DisciplineCategory.fromKey(
+                        priority.discipline.category,
+                      ),
+                      onTap: () =>
+                          _open(DisciplinesPage(database: widget.database)),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 20),
+              Text(
+                'Ações rápidas',
+                style: AppTextStyles.sectionTitle(textColor),
+              ),
+              const SizedBox(height: 8),
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 2.0,
+                children: [
+                  QuickActionButton(
+                    icon: Icons.play_circle_rounded,
+                    label: 'Iniciar sessão',
+                    onTap: () => _open(TimerPage(database: widget.database)),
+                  ),
+                  QuickActionButton(
+                    icon: Icons.bar_chart_rounded,
+                    label: 'Ver histórico',
+                    onTap: () => _open(HistoryPage(database: widget.database)),
+                  ),
+                  QuickActionButton(
+                    icon: Icons.checklist_rounded,
+                    label: 'Atividades e prazos',
+                    onTap: () =>
+                        _open(ActivitiesPage(database: widget.database)),
+                  ),
+                  QuickActionButton(
+                    icon: Icons.flag_rounded,
+                    label: 'Definir metas',
+                    onTap: () =>
+                        _open(DisciplinesPage(database: widget.database)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Últimas sessões',
+                    style: AppTextStyles.sectionTitle(textColor),
+                  ),
+                  TextButton(
+                    onPressed: () =>
+                        _open(HistoryPage(database: widget.database)),
+                    child: const Text('Ver todas'),
+                  ),
+                ],
+              ),
+              ...data.recentSessions.map(
+                (s) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.history_rounded),
+                  title: Text(s.discipline.name),
+                  subtitle: Text(
+                    s.session.notes?.isNotEmpty == true ? s.session.notes! : '',
+                  ),
+                  trailing: Text('${s.session.durationSeconds ~/ 60}m'),
                 ),
               ),
             ],
@@ -117,14 +342,18 @@ class _HomePageState extends State<HomePage> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: 0,
+        height: 60,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         onDestinationSelected: (index) {
           if (index == 1) {
             _open(DisciplinesPage(database: widget.database));
           } else if (index == 2) {
-            _open(TimerPage(database: widget.database));
+            _open(ActivitiesPage(database: widget.database));
           } else if (index == 3) {
-            _open(HistoryPage(database: widget.database));
+            _open(TimerPage(database: widget.database));
           } else if (index == 4) {
+            _open(HistoryPage(database: widget.database));
+          } else if (index == 5) {
             _open(StatisticsPage(database: widget.database));
           }
         },
@@ -133,6 +362,10 @@ class _HomePageState extends State<HomePage> {
           NavigationDestination(
             icon: Icon(Icons.menu_book),
             label: 'Disciplinas',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.checklist),
+            label: 'Atividades',
           ),
           NavigationDestination(icon: Icon(Icons.timer), label: 'Cronômetro'),
           NavigationDestination(icon: Icon(Icons.history), label: 'Histórico'),
@@ -147,40 +380,17 @@ class _HomePageState extends State<HomePage> {
 }
 
 class _HomeData {
-  const _HomeData({required this.priorities, required this.summary});
+  const _HomeData({
+    required this.priorities,
+    required this.summary,
+    required this.dashboard,
+    required this.recentSessions,
+    required this.upcomingActivities,
+  });
 
   final List<DisciplinePriority> priorities;
   final WeeklySummary summary;
-}
-
-class _WeeklySummaryCard extends StatelessWidget {
-  const _WeeklySummaryCard({required this.summary});
-
-  final WeeklySummary summary;
-
-  @override
-  Widget build(BuildContext context) {
-    final difference = summary.differenceMinutes;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${summary.currentMinutes} de ${summary.totalGoalMinutes} min',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            LinearProgressIndicator(value: summary.progress.clamp(0, 1)),
-            const SizedBox(height: 8),
-            Text(
-              '${summary.goalsReached}/${summary.disciplineCount} metas atingidas • '
-              '${difference >= 0 ? '+' : ''}$difference min versus semana anterior',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  final DashboardSummary dashboard;
+  final List<StudySessionWithDiscipline> recentSessions;
+  final List<ActivityWithDiscipline> upcomingActivities;
 }

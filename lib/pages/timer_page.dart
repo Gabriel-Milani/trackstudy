@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:trackstudy/database/app_database.dart';
+import 'package:trackstudy/widgets/dashboard_widgets.dart';
 
 class TimerPage extends StatefulWidget {
   const TimerPage({super.key, required this.database});
@@ -25,6 +26,8 @@ class _TimerPageState extends State<TimerPage> {
   bool _pomodoroEnabled = false;
   int _focusMinutes = 25;
   int? _selectedDisciplineId;
+
+  static const double _buttonHeight = 56;
 
   void _startTimer() {
     if (_selectedDisciplineId == null) {
@@ -127,13 +130,6 @@ class _TimerPageState extends State<TimerPage> {
     );
   }
 
-  String _formatDuration(Duration duration) {
-    final hours = duration.inHours.toString().padLeft(2, '0');
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$hours:$minutes:$seconds';
-  }
-
   @override
   void dispose() {
     _timer?.cancel();
@@ -144,7 +140,11 @@ class _TimerPageState extends State<TimerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Cronômetro')),
+      appBar: const AppHeaderBar(
+        icon: Icons.timer_rounded,
+        title: 'Cronômetro',
+        subtitle: 'Mantenha o foco. Cada minuto conta.',
+      ),
       body: StreamBuilder<List<Discipline>>(
         stream: widget.database.disciplinesDao.watchAllDisciplines(),
         builder: (context, snapshot) {
@@ -209,34 +209,65 @@ class _TimerPageState extends State<TimerPage> {
                       ? null
                       : (value) => setState(() => _focusMinutes = value ?? 25),
                 ),
-              const SizedBox(height: 40),
-              Center(
-                child: Text(
-                  _formatDuration(_elapsed),
-                  style: const TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
+              const SizedBox(height: 24),
+              TimerDisplay(elapsed: _elapsed, isLive: _isActive && !_isPaused),
               const SizedBox(height: 24),
               if (!_isActive)
-                FilledButton.icon(
-                  onPressed: _startTimer,
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Iniciar'),
+                SizedBox(
+                  width: double.infinity,
+                  height: _buttonHeight,
+                  child: FilledButton.icon(
+                    onPressed: _startTimer,
+                    style: FilledButton.styleFrom(
+                      textStyle: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Iniciar'),
+                  ),
                 )
               else ...[
-                FilledButton.tonalIcon(
-                  onPressed: _isPaused ? _resumeTimer : _pauseTimer,
-                  icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
-                  label: Text(_isPaused ? 'Retomar' : 'Pausar'),
+                SizedBox(
+                  width: double.infinity,
+                  height: _buttonHeight,
+                  child: FilledButton.tonalIcon(
+                    onPressed: _isPaused ? _resumeTimer : _pauseTimer,
+                    style: FilledButton.styleFrom(
+                      textStyle: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
+                    label: Text(_isPaused ? 'Retomar' : 'Pausar'),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                FilledButton.icon(
-                  onPressed: _stopTimer,
-                  icon: const Icon(Icons.stop),
-                  label: const Text('Encerrar e salvar'),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: _buttonHeight,
+                  child: FilledButton.icon(
+                    onPressed: _stopTimer,
+                    style: FilledButton.styleFrom(
+                      textStyle: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    icon: const Icon(Icons.stop),
+                    label: const Text('Encerrar e salvar'),
+                  ),
                 ),
               ],
             ],

@@ -42,8 +42,20 @@ class $DisciplinesTable extends Disciplines
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _categoryMeta = const VerificationMeta(
+    'category',
+  );
   @override
-  List<GeneratedColumn> get $columns => [id, name, weeklyGoalMinutes];
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('outras'),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, name, weeklyGoalMinutes, category];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -78,6 +90,12 @@ class $DisciplinesTable extends Disciplines
     } else if (isInserting) {
       context.missing(_weeklyGoalMinutesMeta);
     }
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+      );
+    }
     return context;
   }
 
@@ -99,6 +117,10 @@ class $DisciplinesTable extends Disciplines
         DriftSqlType.int,
         data['${effectivePrefix}weekly_goal_minutes'],
       )!,
+      category: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category'],
+      )!,
     );
   }
 
@@ -112,10 +134,15 @@ class Discipline extends DataClass implements Insertable<Discipline> {
   final int id;
   final String name;
   final int weeklyGoalMinutes;
+
+  /// Categoria da disciplina (chave de DisciplineCategory), usada para
+  /// escolher o ícone exibido nos cards. Ex: 'exatas', 'tecnologia'.
+  final String category;
   const Discipline({
     required this.id,
     required this.name,
     required this.weeklyGoalMinutes,
+    required this.category,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -123,6 +150,7 @@ class Discipline extends DataClass implements Insertable<Discipline> {
     map['id'] = Variable<int>(id);
     map['name'] = Variable<String>(name);
     map['weekly_goal_minutes'] = Variable<int>(weeklyGoalMinutes);
+    map['category'] = Variable<String>(category);
     return map;
   }
 
@@ -131,6 +159,7 @@ class Discipline extends DataClass implements Insertable<Discipline> {
       id: Value(id),
       name: Value(name),
       weeklyGoalMinutes: Value(weeklyGoalMinutes),
+      category: Value(category),
     );
   }
 
@@ -143,6 +172,7 @@ class Discipline extends DataClass implements Insertable<Discipline> {
       id: serializer.fromJson<int>(json['id']),
       name: serializer.fromJson<String>(json['name']),
       weeklyGoalMinutes: serializer.fromJson<int>(json['weeklyGoalMinutes']),
+      category: serializer.fromJson<String>(json['category']),
     );
   }
   @override
@@ -152,15 +182,21 @@ class Discipline extends DataClass implements Insertable<Discipline> {
       'id': serializer.toJson<int>(id),
       'name': serializer.toJson<String>(name),
       'weeklyGoalMinutes': serializer.toJson<int>(weeklyGoalMinutes),
+      'category': serializer.toJson<String>(category),
     };
   }
 
-  Discipline copyWith({int? id, String? name, int? weeklyGoalMinutes}) =>
-      Discipline(
-        id: id ?? this.id,
-        name: name ?? this.name,
-        weeklyGoalMinutes: weeklyGoalMinutes ?? this.weeklyGoalMinutes,
-      );
+  Discipline copyWith({
+    int? id,
+    String? name,
+    int? weeklyGoalMinutes,
+    String? category,
+  }) => Discipline(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    weeklyGoalMinutes: weeklyGoalMinutes ?? this.weeklyGoalMinutes,
+    category: category ?? this.category,
+  );
   Discipline copyWithCompanion(DisciplinesCompanion data) {
     return Discipline(
       id: data.id.present ? data.id.value : this.id,
@@ -168,6 +204,7 @@ class Discipline extends DataClass implements Insertable<Discipline> {
       weeklyGoalMinutes: data.weeklyGoalMinutes.present
           ? data.weeklyGoalMinutes.value
           : this.weeklyGoalMinutes,
+      category: data.category.present ? data.category.value : this.category,
     );
   }
 
@@ -176,46 +213,53 @@ class Discipline extends DataClass implements Insertable<Discipline> {
     return (StringBuffer('Discipline(')
           ..write('id: $id, ')
           ..write('name: $name, ')
-          ..write('weeklyGoalMinutes: $weeklyGoalMinutes')
+          ..write('weeklyGoalMinutes: $weeklyGoalMinutes, ')
+          ..write('category: $category')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, name, weeklyGoalMinutes);
+  int get hashCode => Object.hash(id, name, weeklyGoalMinutes, category);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Discipline &&
           other.id == this.id &&
           other.name == this.name &&
-          other.weeklyGoalMinutes == this.weeklyGoalMinutes);
+          other.weeklyGoalMinutes == this.weeklyGoalMinutes &&
+          other.category == this.category);
 }
 
 class DisciplinesCompanion extends UpdateCompanion<Discipline> {
   final Value<int> id;
   final Value<String> name;
   final Value<int> weeklyGoalMinutes;
+  final Value<String> category;
   const DisciplinesCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.weeklyGoalMinutes = const Value.absent(),
+    this.category = const Value.absent(),
   });
   DisciplinesCompanion.insert({
     this.id = const Value.absent(),
     required String name,
     required int weeklyGoalMinutes,
+    this.category = const Value.absent(),
   }) : name = Value(name),
        weeklyGoalMinutes = Value(weeklyGoalMinutes);
   static Insertable<Discipline> custom({
     Expression<int>? id,
     Expression<String>? name,
     Expression<int>? weeklyGoalMinutes,
+    Expression<String>? category,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (name != null) 'name': name,
       if (weeklyGoalMinutes != null) 'weekly_goal_minutes': weeklyGoalMinutes,
+      if (category != null) 'category': category,
     });
   }
 
@@ -223,11 +267,13 @@ class DisciplinesCompanion extends UpdateCompanion<Discipline> {
     Value<int>? id,
     Value<String>? name,
     Value<int>? weeklyGoalMinutes,
+    Value<String>? category,
   }) {
     return DisciplinesCompanion(
       id: id ?? this.id,
       name: name ?? this.name,
       weeklyGoalMinutes: weeklyGoalMinutes ?? this.weeklyGoalMinutes,
+      category: category ?? this.category,
     );
   }
 
@@ -243,6 +289,9 @@ class DisciplinesCompanion extends UpdateCompanion<Discipline> {
     if (weeklyGoalMinutes.present) {
       map['weekly_goal_minutes'] = Variable<int>(weeklyGoalMinutes.value);
     }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
     return map;
   }
 
@@ -251,7 +300,8 @@ class DisciplinesCompanion extends UpdateCompanion<Discipline> {
     return (StringBuffer('DisciplinesCompanion(')
           ..write('id: $id, ')
           ..write('name: $name, ')
-          ..write('weeklyGoalMinutes: $weeklyGoalMinutes')
+          ..write('weeklyGoalMinutes: $weeklyGoalMinutes, ')
+          ..write('category: $category')
           ..write(')'))
         .toString();
   }
@@ -1134,12 +1184,14 @@ typedef $$DisciplinesTableCreateCompanionBuilder =
       Value<int> id,
       required String name,
       required int weeklyGoalMinutes,
+      Value<String> category,
     });
 typedef $$DisciplinesTableUpdateCompanionBuilder =
     DisciplinesCompanion Function({
       Value<int> id,
       Value<String> name,
       Value<int> weeklyGoalMinutes,
+      Value<String> category,
     });
 
 final class $$DisciplinesTableReferences
@@ -1204,6 +1256,11 @@ class $$DisciplinesTableFilterComposer
 
   ColumnFilters<int> get weeklyGoalMinutes => $composableBuilder(
     column: $table.weeklyGoalMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get category => $composableBuilder(
+    column: $table.category,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1281,6 +1338,11 @@ class $$DisciplinesTableOrderingComposer
     column: $table.weeklyGoalMinutes,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$DisciplinesTableAnnotationComposer
@@ -1302,6 +1364,9 @@ class $$DisciplinesTableAnnotationComposer
     column: $table.weeklyGoalMinutes,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
 
   Expression<T> studySessionsRefs<T extends Object>(
     Expression<T> Function($$StudySessionsTableAnnotationComposer a) f,
@@ -1385,20 +1450,24 @@ class $$DisciplinesTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<int> weeklyGoalMinutes = const Value.absent(),
+                Value<String> category = const Value.absent(),
               }) => DisciplinesCompanion(
                 id: id,
                 name: name,
                 weeklyGoalMinutes: weeklyGoalMinutes,
+                category: category,
               ),
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
                 required String name,
                 required int weeklyGoalMinutes,
+                Value<String> category = const Value.absent(),
               }) => DisciplinesCompanion.insert(
                 id: id,
                 name: name,
                 weeklyGoalMinutes: weeklyGoalMinutes,
+                category: category,
               ),
           withReferenceMapper: (p0) => p0
               .map(

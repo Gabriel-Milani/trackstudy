@@ -57,6 +57,17 @@ class StudySessionsDao extends DatabaseAccessor<AppDatabase>
     );
   }
 
+  Future<List<StudySession>> getSessionsBetween(DateTime start, DateTime end) {
+    return (select(studySessions)
+          ..where(
+            (session) =>
+                session.startedAt.isBiggerOrEqualValue(start) &
+                session.startedAt.isSmallerThanValue(end),
+          )
+          ..orderBy([(session) => OrderingTerm.asc(session.startedAt)]))
+        .get();
+  }
+
   Stream<List<StudySessionWithDiscipline>> watchSessionsWithDiscipline() {
     final query = select(studySessions).join([
       innerJoin(

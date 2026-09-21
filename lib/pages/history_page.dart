@@ -2,6 +2,9 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:trackstudy/database/app_database.dart';
 import 'package:trackstudy/database/daos/study_sessions_dao.dart';
+import 'package:trackstudy/theme/app_colors.dart';
+import 'package:trackstudy/theme/discipline_category.dart';
+import 'package:trackstudy/widgets/dashboard_widgets.dart';
 
 class HistoryPage extends StatelessWidget {
   const HistoryPage({super.key, required this.database});
@@ -39,6 +42,7 @@ class HistoryPage extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: const Text('Excluir sessão?'),
         content: const Text('Essa ação removerá a sessão dos relatórios.'),
+        actionsAlignment: MainAxisAlignment.center,
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -59,8 +63,10 @@ class HistoryPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Histórico'),
+      appBar: AppHeaderBar(
+        icon: Icons.history_rounded,
+        title: 'Histórico',
+        subtitle: 'Acompanhe suas últimas sessões de estudo.',
         actions: [
           IconButton(
             tooltip: 'Registrar sessão manualmente',
@@ -85,43 +91,95 @@ class HistoryPage extends StatelessWidget {
           if (sessions.isEmpty) {
             return const Center(child: Text('Nenhuma sessão registrada.'));
           }
-          return ListView.separated(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+          return ListView.builder(
+            padding: const EdgeInsets.all(12),
             itemCount: sessions.length,
-            separatorBuilder: (context, index) => const Divider(height: 1),
             itemBuilder: (context, index) {
               final item = sessions[index];
-              return ListTile(
-                leading: const Icon(Icons.history),
-                title: Text(item.discipline.name),
-                subtitle: Text(
-                  [
-                    _dateAndTime(item.session.startedAt),
-                    if (item.session.notes?.isNotEmpty == true)
-                      item.session.notes!,
-                  ].join('\n'),
-                ),
-                isThreeLine: item.session.notes?.isNotEmpty == true,
-                trailing: PopupMenuButton<String>(
-                  onSelected: (action) {
-                    if (action == 'edit') {
-                      _openForm(context, existing: item);
-                    } else {
-                      _delete(context, item.session);
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'duration',
-                      enabled: false,
-                      child: Text(_duration(item.session.durationSeconds)),
-                    ),
-                    const PopupMenuItem(value: 'edit', child: Text('Editar')),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Text('Excluir'),
-                    ),
-                  ],
+              final category = DisciplineCategory.fromKey(
+                item.discipline.category,
+              );
+              final bg =
+                  AppColors.disciplineBg[category.colorIndex %
+                      AppColors.disciplineBg.length];
+              final fg =
+                  AppColors.disciplineFg[category.colorIndex %
+                      AppColors.disciplineFg.length];
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: bg,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(category.icon, color: fg, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    item.discipline.name,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                                ),
+                                Text(_duration(item.session.durationSeconds)),
+                              ],
+                            ),
+                            Text(
+                              '${category.label} • Meta semanal: ${item.discipline.weeklyGoalMinutes} min',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(_dateAndTime(item.session.startedAt)),
+                            if (item.session.notes?.isNotEmpty == true)
+                              Text(
+                                item.session.notes!,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                SoftIconButton(
+                                  icon: Icons.edit_rounded,
+                                  tooltip: 'Editar',
+                                  background: AppColors.disciplineBg[0],
+                                  iconColor: AppColors.disciplineFg[0],
+                                  onTap: () =>
+                                      _openForm(context, existing: item),
+                                ),
+                                const SizedBox(width: 6),
+                                SoftIconButton(
+                                  icon: Icons.delete_outline_rounded,
+                                  tooltip: 'Excluir',
+                                  background: const Color(0xFFFEE2E2),
+                                  iconColor: AppColors.alert,
+                                  onTap: () => _delete(context, item.session),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -178,6 +236,14 @@ class _SessionFormDialogState extends State<_SessionFormDialog> {
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_startedAt),
+      initialEntryMode: TimePickerEntryMode.input,
+      builder: (context, child) {
+        // Força formato 24h (07:55, 19:55) e some com o seletor AM/PM.
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+          child: child!,
+        );
+      },
     );
     if (time == null || !mounted) return;
     setState(() {
