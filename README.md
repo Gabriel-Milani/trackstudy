@@ -123,3 +123,36 @@ Carlos Eduardo Ruzene Nascimento
 Luís Gabriel Milani da Silva
 
 Projeto desenvolvido no Instituto Federal de Educação, Ciência e Tecnologia de São Paulo — Câmpus Campinas, em 2026.
+
+## Evolução consolidada
+
+A versão consolidada adiciona persistência do cronômetro, tema persistente, filtros no histórico, backup/restauração local, exportação PDF, correções de métricas e prazo, melhoria das validações e otimização das consultas do dashboard/prioridade. Consulte `MELHORIAS_IMPLEMENTADAS.md` para o detalhamento técnico.
+
+## Atualizações da versão consolidada (2026-09)
+
+A versão consolidada adiciona e revisa os seguintes fluxos:
+
+- cronômetro persistente, com recuperação segura após fechar o aplicativo;
+- detecção de sessões anormalmente longas para evitar registrar horas esquecidas por engano;
+- Pomodoro completo com foco, pausa curta, pausa longa e ciclos configuráveis;
+- notificações locais ao concluir foco e pausas;
+- anotações editáveis durante a sessão e persistidas automaticamente;
+- proteção contra exclusão de disciplina com sessão ativa;
+- tema claro, escuro ou do sistema persistente;
+- dias habituais de estudo configuráveis, usados pelo algoritmo de prioridade;
+- prioridade considerando meta, prazo, tempo sem estudar e rotina semanal;
+- explicação dos motivos da disciplina recomendada;
+- busca, filtros e agrupamento por data no histórico;
+- backup externo em JSON, compartilhamento e restauração por arquivo com pré-visualização;
+- backup interno automático antes de uma restauração;
+- relatório PDF ampliado, salvável/compartilhável e exportável pelo período selecionado na tela de relatórios.
+
+### Dependências adicionais
+
+Após baixar o projeto, execute:
+
+```bash
+flutter pub get
+```
+
+No Android 13 ou superior, o aplicativo solicita permissão para exibir as notificações do cronômetro.

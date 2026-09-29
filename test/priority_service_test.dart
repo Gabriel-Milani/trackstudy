@@ -77,4 +77,83 @@ void main() {
       greaterThan(PriorityService.activityUrgency(future, now)),
     );
   });
+
+  test('activity due today is urgent but not overdue-level', () {
+    final now = DateTime(2026, 9, 28, 20, 30);
+    final today = Activity(
+      id: 2,
+      disciplineId: 1,
+      title: 'Entrega hoje',
+      dueAt: DateTime(2026, 9, 28),
+      estimatedMinutes: 60,
+      isCompleted: false,
+    );
+
+    final score = PriorityService.activityUrgency(today, now);
+    expect(score, 60);
+    expect(score, lessThan(10000));
+  });
+
+  test('activities urgency sums all pending activities', () {
+    final now = DateTime(2026, 9, 28);
+    final today = Activity(
+      id: 1,
+      disciplineId: 1,
+      title: 'Lista',
+      dueAt: DateTime(2026, 9, 28),
+      estimatedMinutes: 60,
+      isCompleted: false,
+    );
+    final tomorrow = today.copyWith(
+      id: 2,
+      title: 'Revisao',
+      dueAt: DateTime(2026, 9, 29),
+      estimatedMinutes: 40,
+    );
+
+    expect(PriorityService.activitiesUrgency([today, tomorrow], now), 80);
+  });
+
+  test('review intervals increase with the study history', () {
+    expect(PriorityService.reviewIntervalForSessions(1), 1);
+    expect(PriorityService.reviewIntervalForSessions(2), 3);
+    expect(PriorityService.reviewIntervalForSessions(4), 7);
+    expect(PriorityService.reviewIntervalForSessions(7), 14);
+    expect(PriorityService.reviewIntervalForSessions(8), 30);
+  });
+
+  test('review becomes urgent only when its interval is due', () {
+    final lastStudy = DateTime(2026, 9, 20, 18);
+
+    expect(
+      PriorityService.nextReviewDate(lastStudy: lastStudy, sessionCount: 2),
+      DateTime(2026, 9, 23),
+    );
+    expect(
+      PriorityService.reviewUrgency(
+        lastStudy: lastStudy,
+        sessionCount: 2,
+        now: DateTime(2026, 9, 22),
+      ),
+      0,
+    );
+    expect(
+      PriorityService.reviewUrgency(
+        lastStudy: lastStudy,
+        sessionCount: 2,
+        now: DateTime(2026, 9, 25),
+      ),
+      16,
+    );
+  });
+
+  test('remainingStudyDays respects configured weekend days', () {
+    expect(
+      PriorityService.remainingStudyDays(DateTime(2026, 8, 29), {
+        DateTime.saturday,
+        DateTime.sunday,
+      }),
+      2,
+    );
+  });
 }

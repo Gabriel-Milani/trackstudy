@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:trackstudy/database/app_database.dart';
+import 'package:trackstudy/services/dashboard_service.dart';
 import 'package:trackstudy/services/priority_service.dart';
 import 'package:trackstudy/services/statistics_service.dart';
+import 'package:trackstudy/services/report_export_service.dart';
+import 'package:trackstudy/theme/app_colors.dart';
+import 'package:trackstudy/theme/app_text_styles.dart';
+import 'package:trackstudy/widgets/dashboard_widgets.dart';
 
 enum StatisticsPeriod { currentWeek, currentMonth, allTime, custom }
 
@@ -17,6 +22,20 @@ class StatisticsPage extends StatefulWidget {
 class _StatisticsPageState extends State<StatisticsPage> {
   StatisticsPeriod _period = StatisticsPeriod.currentWeek;
   DateTimeRange? _customRange;
+  late Future<List<DisciplineStatistics>> _statisticsFuture;
+  late Future<Map<DateTime, int>> _heatmapFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshFutures();
+  }
+
+  void _refreshFutures() {
+    final interval = _selectedInterval();
+    _statisticsFuture = StatisticsService(widget.database).getStatistics(start: interval.start, end: interval.end);
+    _heatmapFuture = DashboardService(widget.database).getDailyMinutesForLastDays(84);
+  }
 
   String _periodLabel(StatisticsPeriod period) => switch (period) {
     StatisticsPeriod.currentWeek => 'Semana atual',
@@ -62,10 +81,14 @@ class _StatisticsPageState extends State<StatisticsPage> {
       setState(() {
         _period = period;
         _customRange = range;
+        _refreshFutures();
       });
       return;
     }
-    setState(() => _period = period);
+    setState(() {
+      _period = period;
+      _refreshFutures();
+    });
   }
 
   String _formatDuration(int seconds) {
@@ -82,11 +105,36 @@ class _StatisticsPageState extends State<StatisticsPage> {
   @override
   Widget build(BuildContext context) {
     final interval = _selectedInterval();
-    final service = StatisticsService(widget.database);
+    final textColor =
+        Theme.of(context).textTheme.bodyLarge?.color ??
+        AppColors.lightTextPrimary;
+    final secondaryColor = Theme.of(context).brightness == Brightness.dark
+        ? AppColors.darkTextSecondary
+        : AppColors.lightTextSecondary;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Relatórios')),
+      appBar: AppHeaderBar(
+        icon: Icons.bar_chart_rounded,
+        title: 'Relatórios',
+        subtitle: 'Veja sua evolução por disciplina.',
+        actions: [
+          IconButton(
+            tooltip: 'Compartilhar PDF deste período',
+            onPressed: () async {
+              try {
+                await ReportExportService(widget.database).sharePdf(start: interval.start, end: interval.end);
+              } catch (error) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Não foi possível exportar: $error')));
+                }
+              }
+            },
+            icon: const Icon(Icons.ios_share_rounded),
+          ),
+        ],
+      ),
       body: FutureBuilder<List<DisciplineStatistics>>(
-        future: service.getStatistics(start: interval.start, end: interval.end),
+        future: _statisticsFuture,
         builder: (context, snapshot) {
           final statistics = snapshot.data ?? const <DisciplineStatistics>[];
           final totalSeconds = statistics.fold<int>(
@@ -138,7 +186,43 @@ class _StatisticsPageState extends State<StatisticsPage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
+              Text(
+                'Consistência',
+                style: AppTextStyles.sectionTitle(textColor),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Últimas 12 semanas',
+                style: AppTextStyles.cardSubtitle(secondaryColor),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Theme.of(context).dividerColor,
+                    width: 0.6,
+                  ),
+                ),
+                child: FutureBuilder<Map<DateTime, int>>(
+                  future: _heatmapFuture,
+                  builder: (context, heatmapSnapshot) {
+                    if (!heatmapSnapshot.hasData) {
+                      return const SizedBox(
+                        height: 90,
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    return ConsistencyHeatmap(
+                      dailyMinutes: heatmapSnapshot.data!,
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
               Text(
                 'Tempo por disciplina',
                 style: Theme.of(context).textTheme.titleLarge,
@@ -154,7 +238,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                 ...statistics.map(
                   (item) => _StatisticsBar(
                     statistics: item,
-                    progress: maxSeconds == 0
+                    comparativeProgress: maxSeconds == 0
                         ? 0
                         : item.totalSeconds / maxSeconds,
                     durationLabel: _formatDuration(item.totalSeconds),
@@ -172,13 +256,16 @@ class _StatisticsPageState extends State<StatisticsPage> {
 class _StatisticsBar extends StatelessWidget {
   const _StatisticsBar({
     required this.statistics,
-    required this.progress,
+    required this.comparativeProgress,
     required this.durationLabel,
     required this.showWeeklyGoal,
   });
 
   final DisciplineStatistics statistics;
-  final double progress;
+
+  /// Proporção em relação à disciplina com mais tempo estudado no período
+  /// (usada só quando não há uma meta fixa pra comparar, ex: mês/todo período).
+  final double comparativeProgress;
   final String durationLabel;
   final bool showWeeklyGoal;
 
@@ -186,6 +273,11 @@ class _StatisticsBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final goal = statistics.discipline.weeklyGoalMinutes;
     final goalProgress = goal == 0 ? 0.0 : statistics.totalMinutes / goal;
+    // Quando dá pra comparar com uma meta semanal de verdade, a barra usa
+    // esse valor (é o que o texto abaixo também mostra); senão, cai pra
+    // comparação relativa entre disciplinas.
+    final barValue = showWeeklyGoal ? goalProgress : comparativeProgress;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -199,7 +291,10 @@ class _StatisticsBar extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            LinearProgressIndicator(value: progress.clamp(0, 1)),
+            AnimatedProgressBar(
+              value: barValue,
+              valueColor: Theme.of(context).colorScheme.primary,
+            ),
             if (showWeeklyGoal) ...[
               const SizedBox(height: 8),
               Text(

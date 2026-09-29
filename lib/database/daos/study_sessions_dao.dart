@@ -57,6 +57,38 @@ class StudySessionsDao extends DatabaseAccessor<AppDatabase>
     );
   }
 
+  Future<List<StudySession>> getSessionsBetween(DateTime start, DateTime end) {
+    return (select(studySessions)
+          ..where(
+            (session) =>
+                session.startedAt.isBiggerOrEqualValue(start) &
+                session.startedAt.isSmallerThanValue(end),
+          )
+          ..orderBy([(session) => OrderingTerm.asc(session.startedAt)]))
+        .get();
+  }
+
+  Future<Map<int, int>> getTotalsByDiscipline({
+    DateTime? start,
+    DateTime? end,
+  }) async {
+    final total = studySessions.durationSeconds.sum();
+    final query = selectOnly(studySessions)
+      ..addColumns([studySessions.disciplineId, total])
+      ..groupBy([studySessions.disciplineId]);
+    if (start != null && end != null) {
+      query.where(
+        studySessions.startedAt.isBiggerOrEqualValue(start) &
+            studySessions.startedAt.isSmallerThanValue(end),
+      );
+    }
+    final rows = await query.get();
+    return {
+      for (final row in rows)
+        row.read(studySessions.disciplineId)!: row.read(total) ?? 0,
+    };
+  }
+
   Stream<List<StudySessionWithDiscipline>> watchSessionsWithDiscipline() {
     final query = select(studySessions).join([
       innerJoin(

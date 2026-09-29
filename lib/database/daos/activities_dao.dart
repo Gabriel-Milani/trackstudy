@@ -44,6 +44,13 @@ class ActivitiesDao extends DatabaseAccessor<AppDatabase>
         .get();
   }
 
+  Future<List<Activity>> getPendingActivities() {
+    return (select(activities)
+          ..where((activity) => activity.isCompleted.equals(false))
+          ..orderBy([(activity) => OrderingTerm.asc(activity.dueAt)]))
+        .get();
+  }
+
   Future<int> insertActivity(ActivitiesCompanion activity) =>
       into(activities).insert(activity);
 

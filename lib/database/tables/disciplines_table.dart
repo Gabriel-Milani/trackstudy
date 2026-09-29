@@ -6,4 +6,8 @@ class Disciplines extends Table {
   TextColumn get name => text()();
 
   IntColumn get weeklyGoalMinutes => integer()();
+
+  /// Categoria da disciplina (chave de DisciplineCategory), usada para
+  /// escolher o ícone exibido nos cards. Ex: 'exatas', 'tecnologia'.
+  TextColumn get category => text().withDefault(const Constant('outras'))();
 }

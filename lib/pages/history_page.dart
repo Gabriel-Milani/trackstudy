@@ -2,17 +2,66 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:trackstudy/database/app_database.dart';
 import 'package:trackstudy/database/daos/study_sessions_dao.dart';
+import 'package:trackstudy/theme/app_colors.dart';
+import 'package:trackstudy/theme/discipline_category.dart';
+import 'package:trackstudy/widgets/dashboard_widgets.dart';
 
-class HistoryPage extends StatelessWidget {
+enum HistoryPeriod { all, today, week, month }
+
+class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key, required this.database});
 
   final AppDatabase database;
+
+  @override
+  State<HistoryPage> createState() => _HistoryPageState();
+}
+
+class _HistoryPageState extends State<HistoryPage> {
+  AppDatabase get database => widget.database;
+  HistoryPeriod _period = HistoryPeriod.all;
+  int? _disciplineId;
+  final _searchController = TextEditingController();
+  String _search = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  String _periodLabel(HistoryPeriod period) => switch (period) {
+        HistoryPeriod.all => 'Tudo',
+        HistoryPeriod.today => 'Hoje',
+        HistoryPeriod.week => '7 dias',
+        HistoryPeriod.month => '30 dias',
+      };
+
+  bool _matchesPeriod(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final sessionDay = DateTime(date.year, date.month, date.day);
+    return switch (_period) {
+      HistoryPeriod.all => true,
+      HistoryPeriod.today => sessionDay == today,
+      HistoryPeriod.week => !sessionDay.isBefore(today.subtract(const Duration(days: 6))),
+      HistoryPeriod.month => !sessionDay.isBefore(today.subtract(const Duration(days: 29))),
+    };
+  }
 
   String _twoDigits(int value) => value.toString().padLeft(2, '0');
 
   String _dateAndTime(DateTime date) =>
       '${_twoDigits(date.day)}/${_twoDigits(date.month)}/${date.year} - '
       '${_twoDigits(date.hour)}:${_twoDigits(date.minute)}';
+
+  String _dayLabel(DateTime day) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    if (day == today) return 'Hoje';
+    if (day == today.subtract(const Duration(days: 1))) return 'Ontem';
+    return '${_twoDigits(day.day)}/${_twoDigits(day.month)}/${day.year}';
+  }
 
   String _duration(int seconds) {
     final duration = Duration(seconds: seconds);
@@ -39,6 +88,7 @@ class HistoryPage extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: const Text('Excluir sessão?'),
         content: const Text('Essa ação removerá a sessão dos relatórios.'),
+        actionsAlignment: MainAxisAlignment.center,
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -59,8 +109,10 @@ class HistoryPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Histórico'),
+      appBar: AppHeaderBar(
+        icon: Icons.history_rounded,
+        title: 'Histórico',
+        subtitle: 'Acompanhe suas últimas sessões de estudo.',
         actions: [
           IconButton(
             tooltip: 'Registrar sessão manualmente',
@@ -80,51 +132,219 @@ class HistoryPage extends StatelessWidget {
               child: Text('Não foi possível carregar o histórico.'),
             );
           }
-          final sessions =
+          final allSessions =
               snapshot.data ?? const <StudySessionWithDiscipline>[];
-          if (sessions.isEmpty) {
+          if (allSessions.isEmpty) {
             return const Center(child: Text('Nenhuma sessão registrada.'));
           }
-          return ListView.separated(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: sessions.length,
-            separatorBuilder: (context, index) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final item = sessions[index];
-              return ListTile(
-                leading: const Icon(Icons.history),
-                title: Text(item.discipline.name),
-                subtitle: Text(
-                  [
-                    _dateAndTime(item.session.startedAt),
-                    if (item.session.notes?.isNotEmpty == true)
-                      item.session.notes!,
-                  ].join('\n'),
-                ),
-                isThreeLine: item.session.notes?.isNotEmpty == true,
-                trailing: PopupMenuButton<String>(
-                  onSelected: (action) {
-                    if (action == 'edit') {
-                      _openForm(context, existing: item);
-                    } else {
-                      _delete(context, item.session);
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'duration',
-                      enabled: false,
-                      child: Text(_duration(item.session.durationSeconds)),
+          final disciplineMap = <int, Discipline>{
+            for (final item in allSessions) item.discipline.id: item.discipline,
+          };
+          final sessions = allSessions
+              .where(
+                (item) =>
+                    (_disciplineId == null || item.discipline.id == _disciplineId) &&
+                    _matchesPeriod(item.session.startedAt) &&
+                    (_search.isEmpty ||
+                        item.discipline.name.toLowerCase().contains(_search) ||
+                        (item.session.notes ?? '').toLowerCase().contains(_search)),
+              )
+              .toList();
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<HistoryPeriod>(
+                        initialValue: _period,
+                        decoration: const InputDecoration(
+                          labelText: 'Período',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        items: HistoryPeriod.values
+                            .map(
+                              (period) => DropdownMenuItem(
+                                value: period,
+                                child: Text(_periodLabel(period)),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) setState(() => _period = value);
+                        },
+                      ),
                     ),
-                    const PopupMenuItem(value: 'edit', child: Text('Editar')),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Text('Excluir'),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        initialValue: _disciplineId ?? 0,
+                        decoration: const InputDecoration(
+                          labelText: 'Disciplina',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        items: [
+                          const DropdownMenuItem<int>(
+                            value: 0,
+                            child: Text('Todas'),
+                          ),
+                          ...disciplineMap.values.map(
+                            (discipline) => DropdownMenuItem<int>(
+                              value: discipline.id,
+                              child: Text(
+                                discipline.name,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) => setState(
+                          () => _disciplineId = value == 0 ? null : value,
+                        ),
+                      ),
                     ),
                   ],
                 ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Buscar disciplina ou anotação',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _search.isEmpty
+                        ? null
+                        : IconButton(
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _search = '');
+                            },
+                            icon: const Icon(Icons.clear),
+                          ),
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onChanged: (value) => setState(() => _search = value.trim().toLowerCase()),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Expanded(
+                child: sessions.isEmpty
+                    ? const Center(child: Text('Nenhuma sessão neste filtro.'))
+                    : ListView.builder(
+            padding: const EdgeInsets.all(12),
+            itemCount: sessions.length,
+            itemBuilder: (context, index) {
+              final item = sessions[index];
+              final category = DisciplineCategory.fromKey(
+                item.discipline.category,
+              );
+              final bg =
+                  AppColors.disciplineBg[category.colorIndex %
+                      AppColors.disciplineBg.length];
+              final fg =
+                  AppColors.disciplineFg[category.colorIndex %
+                      AppColors.disciplineFg.length];
+              final day = DateTime(item.session.startedAt.year, item.session.startedAt.month, item.session.startedAt.day);
+              final previousDay = index == 0
+                  ? null
+                  : DateTime(sessions[index - 1].session.startedAt.year, sessions[index - 1].session.startedAt.month, sessions[index - 1].session.startedAt.day);
+              final showHeader = previousDay == null || previousDay != day;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (showHeader)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
+                      child: Text(_dayLabel(day), style: Theme.of(context).textTheme.titleSmall),
+                    ),
+                  Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: bg,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(category.icon, color: fg, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    item.discipline.name,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                                ),
+                                Text(_duration(item.session.durationSeconds)),
+                              ],
+                            ),
+                            Text(
+                              '${category.label} • Meta semanal: ${item.discipline.weeklyGoalMinutes} min',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(_dateAndTime(item.session.startedAt)),
+                            if (item.session.notes?.isNotEmpty == true)
+                              Text(
+                                item.session.notes!,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                SoftIconButton(
+                                  icon: Icons.edit_rounded,
+                                  tooltip: 'Editar',
+                                  background: AppColors.disciplineBg[0],
+                                  iconColor: AppColors.disciplineFg[0],
+                                  onTap: () =>
+                                      _openForm(context, existing: item),
+                                ),
+                                const SizedBox(width: 6),
+                                SoftIconButton(
+                                  icon: Icons.delete_outline_rounded,
+                                  tooltip: 'Excluir',
+                                  background: const Color(0xFFFEE2E2),
+                                  iconColor: AppColors.alert,
+                                  onTap: () => _delete(context, item.session),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                  ),
+                ],
               );
             },
+          ),
+              ),
+            ],
           );
         },
       ),
@@ -178,6 +398,14 @@ class _SessionFormDialogState extends State<_SessionFormDialog> {
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_startedAt),
+      initialEntryMode: TimePickerEntryMode.input,
+      builder: (context, child) {
+        // Força formato 24h (07:55, 19:55) e some com o seletor AM/PM.
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+          child: child!,
+        );
+      },
     );
     if (time == null || !mounted) return;
     setState(() {
@@ -193,7 +421,14 @@ class _SessionFormDialogState extends State<_SessionFormDialog> {
 
   Future<void> _save() async {
     final minutes = int.tryParse(_minutesController.text);
-    if (_disciplineId == null || minutes == null || minutes <= 0) return;
+    if (_disciplineId == null || minutes == null || minutes <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecione uma disciplina e informe uma duração maior que zero.'),
+        ),
+      );
+      return;
+    }
     final endedAt = _startedAt.add(Duration(minutes: minutes));
     final notes = _notesController.text.trim();
     final existing = widget.existing?.session;
