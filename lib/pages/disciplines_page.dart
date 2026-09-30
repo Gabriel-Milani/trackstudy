@@ -101,19 +101,23 @@ class _DisciplinesPageState extends State<DisciplinesPage> {
                                   background: const Color(0xFFFEE2E2),
                                   iconColor: AppColors.alert,
                                   onTap: () async {
-                                    final active = await ActiveTimerStore().load();
+                                    final active = await ActiveTimerStore()
+                                        .load();
                                     if (!context.mounted) return;
                                     if (active?.disciplineId == discipline.id) {
                                       await showDialog<void>(
                                         context: context,
                                         builder: (context) => AlertDialog(
-                                          title: const Text('Sessão ativa nesta disciplina'),
+                                          title: const Text(
+                                            'Sessão ativa nesta disciplina',
+                                          ),
                                           content: Text(
                                             'Há uma sessão de ${discipline.name} em andamento. Encerre ou descarte a sessão no cronômetro antes de excluir a disciplina.',
                                           ),
                                           actions: [
                                             FilledButton(
-                                              onPressed: () => Navigator.pop(context),
+                                              onPressed: () =>
+                                                  Navigator.pop(context),
                                               child: const Text('Entendi'),
                                             ),
                                           ],
@@ -128,21 +132,25 @@ class _DisciplinesPageState extends State<DisciplinesPage> {
                                         content: Text(
                                           'Excluir ${discipline.name} também removerá todas as sessões e atividades vinculadas a ela. Esta ação não pode ser desfeita.',
                                         ),
-                                        actionsAlignment: MainAxisAlignment.center,
+                                        actionsAlignment:
+                                            MainAxisAlignment.center,
                                         actions: [
                                           TextButton(
-                                            onPressed: () => Navigator.pop(context, false),
+                                            onPressed: () =>
+                                                Navigator.pop(context, false),
                                             child: const Text('Cancelar'),
                                           ),
                                           FilledButton(
-                                            onPressed: () => Navigator.pop(context, true),
+                                            onPressed: () =>
+                                                Navigator.pop(context, true),
                                             child: const Text('Excluir'),
                                           ),
                                         ],
                                       ),
                                     );
                                     if (confirmed == true) {
-                                      await database.disciplinesDao.deleteDiscipline(discipline);
+                                      await database.disciplinesDao
+                                          .deleteDiscipline(discipline);
                                     }
                                   },
                                 ),
@@ -278,7 +286,9 @@ class _DisciplinesPageState extends State<DisciplinesPage> {
                     if (name.isEmpty || goal == null || goal <= 0) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Informe um nome e uma meta semanal maior que zero.'),
+                          content: Text(
+                            'Informe um nome e uma meta semanal maior que zero.',
+                          ),
                         ),
                       );
                       return;
@@ -384,7 +394,9 @@ class _DisciplinesPageState extends State<DisciplinesPage> {
                     if (name.isEmpty || goal == null || goal <= 0) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Informe um nome e uma meta semanal maior que zero.'),
+                          content: Text(
+                            'Informe um nome e uma meta semanal maior que zero.',
+                          ),
                         ),
                       );
                       return;
