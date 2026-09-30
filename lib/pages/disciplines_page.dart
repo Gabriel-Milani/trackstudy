@@ -313,10 +313,13 @@ class _DisciplinesPageState extends State<DisciplinesPage> {
       },
     );
 
-    // A tela de disciplinas é aberta a partir da página inicial. Após um
-    // cadastro bem-sucedido, volte para ela para que o resumo seja atualizado.
+    // A tela inicial é a rota raiz. Volte explicitamente para ela após um
+    // cadastro bem-sucedido, mesmo que haja outra rota no navegador.
     if (saved == true && mounted) {
-      Navigator.of(context).pop();
+      Navigator.of(
+        context,
+        rootNavigator: true,
+      ).popUntil((route) => route.isFirst);
     }
   }
 
