@@ -39,7 +39,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _refresh() {
-    setState(() => _homeFuture = _loadData());
+    setState(() {
+      _homeFuture = _loadData();
+    });
   }
 
   Future<_HomeData> _loadData() async {
@@ -184,9 +186,12 @@ class _HomePageState extends State<HomePage> {
                   child: ListTile(
                     leading: const Icon(Icons.radio_button_checked_rounded),
                     title: const Text('Sessão em andamento'),
-                    subtitle: Text(activeDisciplineName ?? 'Disciplina em estudo'),
+                    subtitle: Text(
+                      activeDisciplineName ?? 'Disciplina em estudo',
+                    ),
                     trailing: FilledButton.tonal(
-                      onPressed: () => _open(TimerPage(database: widget.database)),
+                      onPressed: () =>
+                          _open(TimerPage(database: widget.database)),
                       child: const Text('Abrir'),
                     ),
                   ),
@@ -220,7 +225,10 @@ class _HomePageState extends State<HomePage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Por que essa prioridade?', style: Theme.of(context).textTheme.titleSmall),
+                        Text(
+                          'Por que essa prioridade?',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
                         const SizedBox(height: 6),
                         for (final reason in top.reasons(DateTime.now()))
                           Padding(
